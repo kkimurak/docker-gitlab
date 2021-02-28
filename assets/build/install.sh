@@ -431,7 +431,7 @@ EOF
 ## https://docs.gitlab.com/ee/user/admin_area/monitoring/health_check.html
 cat > /usr/local/sbin/healthcheck <<EOF
 #!/bin/bash
-url=http://localhost/-/liveness
+url=http://localhost${GITLAB_RELATIVE_URL_ROOT}/-/liveness
 options=( '--insecure' '--location' '--silent' )
 curl "\${options[@]}" \$url
 [[ "\$(curl \${options[@]} -o /dev/null -I -w '%{http_code}' \$url)" == "200" ]]
