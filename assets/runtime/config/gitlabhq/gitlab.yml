@@ -273,10 +273,11 @@ production: &base
         #start-lfs-aws
         aws_access_key_id: {{GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_ACCESS_KEY_ID}}
         aws_secret_access_key: {{GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_SECRET_ACCESS_KEY}}
-        aws_signature_version: {{GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_SIGNATURE_VERSION}} # For creation of signed URLs. Set to 2 if provider does not support v4.
         region: {{GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_REGION}}
+        # Use the following options to configure an AWS compatible host
         host: '{{GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_HOST}}' # default: s3.amazonaws.com
         endpoint: '{{GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_ENDPOINT}}' # default: nil
+        aws_signature_version: {{GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_SIGNATURE_VERSION}} # For creation of signed URLs. Set to 2 if provider does not support v4.
         path_style: {{GITLAB_LFS_OBJECT_STORE_CONNECTION_AWS_PATH_STYLE}} # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
         #end-lfs-aws
         #start-lfs-gcs
@@ -284,12 +285,6 @@ production: &base
         google_client_email: {{GITLAB_LFS_OBJECT_STORE_CONNECTION_GOOGLE_CLIENT_EMAIL}}
         google_json_key_location: {{GITLAB_LFS_OBJECT_STORE_CONNECTION_GOOGLE_JSON_KEY_LOCATION}}
         #end-lfs-gcs
-
-        # Use the following options to configure an AWS compatible host
-        # host: 'localhost' # default: s3.amazonaws.com
-        # endpoint: 'http://127.0.0.1:9000' # default: nil
-        # aws_signature_version: 4 # For creation of signed URLs. Set to 2 if provider does not support v4.
-        # path_style: true # Use 'host/bucket_name/object' instead of 'bucket_name.host/object'
 
   ## Uploads (attachments, avatars, etc...)
   uploads:
