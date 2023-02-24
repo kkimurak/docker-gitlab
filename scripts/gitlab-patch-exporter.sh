@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 set -Ceu
 
@@ -76,7 +76,6 @@ git_listup_change_list_between_revisions_for_file() {
 
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" || exit; pwd)"
-. "${SCRIPT_DIR}/git-generate-patch-for-file-between-version.sh"
 
 UPSTREAM_GITALY_CONFIG_TOML="gitaly.git/config/"
 GITALY_UPSTREAM_CONFIGS="${UPSTREAM_GITALY_CONFIG_TOML}"
@@ -105,17 +104,25 @@ CONFIG_FILE_MAPPING_SED_REGEX=" \
 "
 
 GITLAB_CE_TARGET_REVISION_RANGE=$1
-echo "comparing $GITLAB_CE_TARGET_REVISION_RANGE"
+PATCH_DESTINATION_DIR="${SCRIPT_DIR}/patches_${GITLAB_CE_TARGET_REVISION_RANGE}/"
 
-cd gitlab.git || exit
+echo "comparing $GITLAB_CE_TARGET_REVISION_RANGE"
+mkdir -p "${PATCH_DESTINATION_DIR}"
+i=0
+cd "${SCRIPT_DIR}/../../gitlab.git" || exit
 ( for config_file in $GITLAB_UPSTREAM_CONFIGS; do
   git_listup_change_list_between_revisions_for_file "${GITLAB_CE_TARGET_REVISION_RANGE}" "${config_file}"
-done ) | sort -k1 | uniq | while read -r change; do
-  # format : abbreviated_commit_hash commit_date_YYYY-mm-ddTHH:MM:SSZ first_contained_tag gitlab_merge_request_reference(optional)
+done ) | sort -k2 | uniq | while read -r change; do
+  # format : abbreviated_commit_hash commit_date_YYYY-mm-ddTHH:MM:SSZ
   merge_commit="${change%% *}"
+  first_contained_tag=$(git tag --contains "${merge_commit}" | grep -v rc | sort --version-sort | head -n 1)
   echo "= Generating patch from merge commit ${merge_commit}"
+  ((i++)) || :
+  MR_PATCH_DEST_DIR=$(printf "%s/%03d_%s_%s" "${PATCH_DESTINATION_DIR}" "${i}" "${merge_commit}" "${first_contained_tag}")
+  mkdir -p "${MR_PATCH_DEST_DIR}"
+
   for config_file in $GITLAB_UPSTREAM_CONFIGS; do 
     echo "== for $config_file" 
-    git format-patch "${merge_commit}" -- "${config_file}" | cat
+    git format-patch -o "${MR_PATCH_DEST_DIR}" "${merge_commit}" -- "${config_file}" | cat
   done
 done
