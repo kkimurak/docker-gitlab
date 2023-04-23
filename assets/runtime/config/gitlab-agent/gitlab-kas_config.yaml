@@ -5,7 +5,7 @@
 
 gitlab:
   address: http://localhost:8080{{GITLAB_RELATIVE_URL_ROOT}} # required
-  authentication_secret_file: {{GITLAB_KAS_SECRET}} # required
+  authentication_secret_file: {{GITLAB_AGENT_KAS_API_LISTEN_AUTHENTICATION_SECRET_FILE}} # required
   # ca_certificate_file: /server-ca.pem
   api_rate_limit:
     refill_rate_per_second: 10.0
