@@ -1331,7 +1331,7 @@ gitlab_configure_lfs() {
       GITLAB_LFS_OBJECT_STORE_CONNECTION_GOOGLE_CLIENT_EMAIL \
       GITLAB_LFS_OBJECT_STORE_CONNECTION_GOOGLE_JSON_KEY_LOCATION
   else
-    exec_as_git sed -i -e "/path: {{GITLAB_LFS_OBJECTS_DIR}}/{n;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;d;}"  ${GITLAB_CONFIG}
+    exec_as_git sed -i -e "/path: {{GITLAB_LFS_OBJECTS_DIR}}/{n;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;N;d;}"  ${GITLAB_CONFIG}
   fi
 
   echo "Configuring gitlab::lfs..."
