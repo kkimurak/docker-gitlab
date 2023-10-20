@@ -224,6 +224,10 @@ cp ${GITLAB_BUILD_DIR}/config/database.yml.postgresql ${GITLAB_INSTALL_DIR}/conf
 chown ${GITLAB_USER}: ${GITLAB_INSTALL_DIR}/config/database.yml
 
 # Installs nodejs packages required to compile webpack
+# Default timeout is 30 seconds: https://github.com/yarnpkg/yarn/blob/158d96dce95313d9a00218302631cd263877d164/src/constants.js#L40
+# docker buildx build runs on qemu emulation and is very slow so that easily reach to timeout - result in ESOCKETTIMEDOUT
+# extend here globally : temporally 300 * 1000 milliseconds = 5 minutes
+exec_as_git yarn config set network-timeout 300000 --global 
 exec_as_git yarn install --production --pure-lockfile
 
 echo "Compiling assets. Please be patient, this could take a while..."
