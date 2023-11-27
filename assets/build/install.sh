@@ -51,7 +51,7 @@ find "${GITLAB_BUILD_DIR}/patches/ruby" -name "*.patch" | while read -r patch_fi
   echo "Applying patch ${patch_file}"
   patch -p1 -i "${patch_file}"
 done
-./configure --disable-install-rdoc --enable-shared
+./configure --disable-install-rdoc
 make -j"$(nproc)"
 make install
 cd "$PWD_ORG" && rm -rf /tmp/ruby
