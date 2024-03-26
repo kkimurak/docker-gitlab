@@ -2340,6 +2340,7 @@ execute_raketask() {
     /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
     supervisorctl stop gitlab_extensions:*
     supervisorctl stop gitlab:*
+    supervisorctl stop gitlab_kas
     interactive=true
     for arg in $@
     do
