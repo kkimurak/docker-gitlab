@@ -110,10 +110,12 @@ done ) | sort -k2 | uniq | while read -r change; do
   MR_PATCH_DEST_DIR=$(printf "%s/%03d_%s_%s" "${PATCH_DESTINATION_DIR}" "${i}" "${merge_commit}" "${first_contained_tag}")
   mkdir -p "${MR_PATCH_DEST_DIR}"
 
-  for config_file in $GITLAB_UPSTREAM_CONFIGS; do 
-    echo "== for $config_file" 
-    git format-patch -o "${MR_PATCH_DEST_DIR}" "${merge_commit}" -- "${config_file}" | cat
-  done
+  # git-format-patch
+  # - Specifying number of commits to be exported. By specifying -1, we can generate patches for exact specified commit
+  #   By default, git format-patch will generate since specified commit until HEAD
+  # FIXME: generated patch only contains changes for gitlab.yml.example
+  # shellcheck disable=SC2086
+  git format-patch --output-directory "${MR_PATCH_DEST_DIR}" -1 "${merge_commit}" ${GITLAB_UPSTREAM_CONFIGS} | cat
 done
 
 # in-repository filepath mapping (upstream vs sameersbn/docker-gitlab)
