@@ -92,17 +92,6 @@ GITLAB_UPSTREAM_CONFIGS="${UPSTREAM_GITLAB_DATABASE_YML} ${UPSTREAM_GITLAB_GITLA
 
 DOCKER_GITLAB_RUNTIME_CONFIG_BASE=assets/runtime/config
 
-# in-repository filepath mapping (upstream vs sameersbn/docker-gitlab)
-CONFIG_FILE_MAPPING_SED_REGEX=" \
-  -e s:${UPSTREAM_GITLAB_DATABASE_YML}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/database.yml:g \
-  -e s:${UPSTREAM_GITLAB_GITLAB_YML}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/gitlab.yml:g \
-  -e s:${UPSTREAM_GITLAB_PUMA_RB}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/puma.rb:g \
-  -e s:${UPSTREAM_GITLAB_RELATIVE_URL_RB}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/relative_url.rb:g \
-  -e s:${UPSTREAM_GITLAB_RESQUE_YML}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/resque.yml:g \
-  -e s:${UPSTREAM_GITLAB_DATABASE_YML}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/database.yml:g \
-  -e s:${UPSTREAM_GITLAB_SMTP_SETTINGS_RB}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/smtp_settings.rb:g \
-"
-
 GITLAB_CE_TARGET_REVISION_RANGE=$1
 PATCH_DESTINATION_DIR="${SCRIPT_DIR}/patches_${GITLAB_CE_TARGET_REVISION_RANGE}/"
 
@@ -126,3 +115,14 @@ done ) | sort -k2 | uniq | while read -r change; do
     git format-patch -o "${MR_PATCH_DEST_DIR}" "${merge_commit}" -- "${config_file}" | cat
   done
 done
+
+# in-repository filepath mapping (upstream vs sameersbn/docker-gitlab)
+find "${PATCH_DESTINATION_DIR}" -name "*.patch" -print0 \
+| xargs -0 sed -i \
+  -e "s:${UPSTREAM_GITLAB_DATABASE_YML}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/database.yml:g" \
+  -e "s:${UPSTREAM_GITLAB_GITLAB_YML}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/gitlab.yml:g" \
+  -e "s:${UPSTREAM_GITLAB_PUMA_RB}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/puma.rb:g" \
+  -e "s:${UPSTREAM_GITLAB_RELATIVE_URL_RB}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/relative_url.rb:g" \
+  -e "s:${UPSTREAM_GITLAB_RESQUE_YML}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/resque.yml:g" \
+  -e "s:${UPSTREAM_GITLAB_DATABASE_YML}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/database.yml:g" \
+  -e "s:${UPSTREAM_GITLAB_SMTP_SETTINGS_RB}:${DOCKER_GITLAB_RUNTIME_CONFIG_BASE}/gitlabhq/smtp_settings.rb:g"
