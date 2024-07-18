@@ -51,8 +51,8 @@ git_listup_change_list_between_revisions_for_file() {
   IFS_ORG=$IFS
   IFS=$(printf '\n')
   git log --format=format:%h --follow "$target_revision_duration_string" -- "$target_filepath" | while read -r commit; do
-    merge_commit=$(git_find_merge_of_to "$commit" "$revision_range_end")
-
+    git_find_merge_of_to "$commit" "$revision_range_end"
+  done | sort -k3 | uniq | while read -r merge_commit; do
     # Timezone of each commit will be unified by specifying --date option
     merge_commit_info="$(git show --no-patch --format=%cd%n%B --date=iso8601-strict-local "${merge_commit}")"
 
@@ -70,7 +70,7 @@ git_listup_change_list_between_revisions_for_file() {
     # first_contained_tag="$(git tag --contains "${merge_commit}" --sort=version:refname | grep -v rc | head -n 1)" 
 
     printf "%s %s\n" "$merge_commit" "${merge_date_iso8601}" #"$merge_request_ref" 
-  done | sort -k3 | uniq
+  done
   IFS=$IFS_ORG
 }
 
