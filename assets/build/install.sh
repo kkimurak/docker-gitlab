@@ -484,5 +484,5 @@ rm -rf /var/lib/apt/lists/*
 
 # clean up caches
 rm -rf ${GITLAB_HOME}/.cache ${GITLAB_HOME}/.bundle ${GITLAB_HOME}/go
-rm -rf /root/.cache /root/.bundle ${GITLAB_HOME}/gitlab/node_modules
+rm -rf /root/.cache /root/.bundle
 rm -r /tmp/*
