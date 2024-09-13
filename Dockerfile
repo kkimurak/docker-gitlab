@@ -39,6 +39,7 @@ RUN set -ex && \
  && echo 'deb https://deb.nodesource.com/node_20.x nodistro main' > /etc/apt/sources.list.d/nodesource.list \
  && wget --quiet -O - https://dl.yarnpkg.com/debian/pubkey.gpg  | apt-key add - \
  && echo 'deb https://dl.yarnpkg.com/debian/ stable main' > /etc/apt/sources.list.d/yarn.list \
+ && echo "deb http://security.ubuntu.com/ubuntu focal-security main" > /etc/apt/sources.list.d/focal-security.list \
  && set -ex \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
@@ -53,6 +54,7 @@ RUN set -ex && \
  && update-locale LANG=C.UTF-8 LC_MESSAGES=POSIX \
  && locale-gen en_US.UTF-8 \
  && DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales \
+ && rm -rf /etc/apt/sources.list.d/focal-security.list \
  && rm -rf /var/lib/apt/lists/*
 
 COPY assets/build/ ${GITLAB_BUILD_DIR}/
