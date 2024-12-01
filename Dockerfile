@@ -1,30 +1,88 @@
-FROM ubuntu:focal-20241011
-
 ARG VERSION=17.6.0
+ARG GOLANG_VERSION=1.23.3
 
-ENV GITLAB_VERSION=${VERSION} \
-    RUBY_VERSION=3.2.6 \
-    RUBY_SOURCE_SHA256SUM="d9cb65ecdf3f18669639f2638b63379ed6fbb17d93ae4e726d4eb2bf68a48370" \
-    RUBYGEMS_VERSION=3.5.14 \
-    GOLANG_VERSION=1.23.3 \
-    GITLAB_SHELL_VERSION=14.39.0 \
-    GITLAB_PAGES_VERSION=17.6.0 \
-    GITALY_SERVER_VERSION=17.6.0 \
-    GITLAB_USER="git" \
-    GITLAB_HOME="/home/git" \
-    GITLAB_LOG_DIR="/var/log/gitlab" \
-    GITLAB_CACHE_DIR="/etc/docker-gitlab" \
-    RAILS_ENV=production \
-    NODE_ENV=production
+FROM golang:${GOLANG_VERSION} AS builder_gitlab_shell
+COPY ./env.sh ./env.sh
+RUN <<EOR
+    source ./env.sh
+    # install gitlab-shell
+    echo "Downloading gitlab-shell v.${GITLAB_SHELL_VERSION}..."
+    mkdir -p ${GITLAB_SHELL_INSTALL_DIR}
+    wget -cq ${GITLAB_SHELL_URL} -O ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2
+    tar xf ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2 --strip 1 -C ${GITLAB_SHELL_INSTALL_DIR}
+    rm -rf ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2
+    chown -R ${GITLAB_USER}: ${GITLAB_SHELL_INSTALL_DIR}
 
-ENV GITLAB_INSTALL_DIR="${GITLAB_HOME}/gitlab" \
-    GITLAB_SHELL_INSTALL_DIR="${GITLAB_HOME}/gitlab-shell" \
-    GITLAB_GITALY_INSTALL_DIR="${GITLAB_HOME}/gitaly" \
-    GITLAB_DATA_DIR="${GITLAB_HOME}/data" \
-    GITLAB_BUILD_DIR="${GITLAB_CACHE_DIR}/build" \
-    GITLAB_RUNTIME_DIR="${GITLAB_CACHE_DIR}/runtime"
+    cd ${GITLAB_SHELL_INSTALL_DIR}
+    exec_as_git cp -a config.yml.example config.yml
 
-RUN apt-get update \
+    echo "Compiling gitlab-shell golang executables..."
+    exec_as_git bundle config set --local deployment 'true'
+    exec_as_git bundle config set --local with 'development test'
+    exec_as_git bundle install -j"$(nproc)"
+    exec_as_git "PATH=$PATH" make verify setup
+
+    # remove unused repositories directory created by gitlab-shell install
+    rm -rf ${GITLAB_HOME}/repositories
+EOR
+
+FROM golang:${GOLANG_VERSION} AS builder_gitaly
+COPY ./env.sh ./env.sh
+RUN <<EOR
+    source ./env.sh
+    GITLAB_GITALY_BUILD_DIR=/tmp/gitaly
+    # download and build gitaly
+    echo "Downloading gitaly v.${GITALY_SERVER_VERSION}..."
+    git clone -q -b v${GITALY_SERVER_VERSION} --depth 1 ${GITLAB_GITALY_URL} ${GITLAB_GITALY_BUILD_DIR}
+
+    # install gitaly
+    make -C ${GITLAB_GITALY_BUILD_DIR} install
+    mkdir -p ${GITLAB_GITALY_INSTALL_DIR}
+    # The following line causes some issues. However, according to
+    # <https://gitlab.com/gitlab-org/gitaly/-/merge_requests/5512> and 
+    # <https://gitlab.com/gitlab-org/gitaly/-/merge_requests/5671> there seems to
+    # be some attempts to remove ruby from gitaly.
+    #
+    # cp -a ${GITLAB_GITALY_BUILD_DIR}/ruby ${GITLAB_GITALY_INSTALL_DIR}/
+    cp -a ${GITLAB_GITALY_BUILD_DIR}/config.toml.example ${GITLAB_GITALY_INSTALL_DIR}/config.toml
+    rm -rf ${GITLAB_GITALY_INSTALL_DIR}/ruby/vendor/bundle/ruby/**/cache
+    chown -R ${GITLAB_USER}: ${GITLAB_GITALY_INSTALL_DIR}
+
+    # install git bundled with gitaly.
+    make -C ${GITLAB_GITALY_BUILD_DIR} git GIT_PREFIX=/usr/local
+
+    # clean up
+    rm -rf ${GITLAB_GITALY_BUILD_DIR}
+EOR
+
+FROM golang:${GOLANG_VERSION} AS builder_gitlab_pages
+COPY ./env.sh ./env.sh
+RUN <<EOR
+    source ./env.sh
+    # download gitlab-pages
+    GITLAB_PAGES_BUILD_DIR=/tmp/gitlab-pages
+    echo "Downloading gitlab-pages v.${GITLAB_PAGES_VERSION}..."
+    git clone -q -b v${GITLAB_PAGES_VERSION} --depth 1 ${GITLAB_PAGES_URL} ${GITLAB_PAGES_BUILD_DIR}
+    make -C ${GITLAB_PAGES_BUILD_DIR}
+EOR
+
+FROM golang:${GOLANG_VERSION} AS builder_gitlab_workhorse
+COPY ./env.sh ./env.sh
+RUN <<EOR
+    source ./env.sh
+    # build gitlab-workhorse
+    echo "Build gitlab-workhorse"
+    git config --global --add safe.directory /home/git/gitlab
+    make -C ${GITLAB_WORKHORSE_BUILD_DIR} install
+    # clean up
+    rm -rf ${GITLAB_WORKHORSE_BUILD_DIR}
+EOR
+
+FROM ubuntu:focal-20241011 AS main
+COPY ./env.sh ./env.sh
+
+RUN source ./env.sh \
+ && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     wget ca-certificates apt-transport-https gnupg2 \
  && apt-get upgrade -y \
@@ -57,6 +115,11 @@ RUN set -ex && \
  && DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales \
  && rm -rf /var/lib/apt/lists/*
 
+COPY --from=builder_gitlab_shell ${GITLAB_SHELL_INSTALL_DIR} ${GITLAB_SHELL_INSTALL_DIR}
+COPY --from=builder_gitaly ${GITLAB_GITALY_INSTALL_DIR} ${GITLAB_GITALY_INSTALL_DIR}
+COPY --from=builder_gitaly /usr/local/bin/git /usr/local/bin/git
+COPY --from=builder_gitlab_pages ${GITLAB_PAGES_BUILD_DIR}/gitlab-pages /usr/local/bin/gitlab-pages
+ 
 COPY assets/build/ ${GITLAB_BUILD_DIR}/
 RUN bash ${GITLAB_BUILD_DIR}/install.sh
 
