@@ -7,8 +7,6 @@ GITLAB_PAGES_URL=https://gitlab.com/gitlab-org/gitlab-pages.git
 GITLAB_GITALY_URL=https://gitlab.com/gitlab-org/gitaly.git
 
 GITLAB_WORKHORSE_BUILD_DIR=${GITLAB_INSTALL_DIR}/workhorse
-GITLAB_PAGES_BUILD_DIR=/tmp/gitlab-pages
-GITLAB_GITALY_BUILD_DIR=/tmp/gitaly
 
 RUBY_SRC_URL=https://cache.ruby-lang.org/pub/ruby/${RUBY_VERSION%.*}/ruby-${RUBY_VERSION}.tar.gz
 
@@ -102,76 +100,6 @@ GITLAB_PAGES_VERSION=${GITLAB_PAGES_VERSION:-$(cat ${GITLAB_INSTALL_DIR}/GITLAB_
 # install bundler: use version specified in Gemfile.lock
 BUNDLER_VERSION="$(grep "BUNDLED WITH" ${GITLAB_INSTALL_DIR}/Gemfile.lock -A 1 | grep -v "BUNDLED WITH" | tr -d "[:space:]")"
 gem install bundler:"${BUNDLER_VERSION}"
-
-# download golang
-echo "Downloading Go ${GOLANG_VERSION}..."
-wget -cnv https://storage.googleapis.com/golang/go${GOLANG_VERSION}.linux-amd64.tar.gz -P ${GITLAB_BUILD_DIR}/
-tar -xf ${GITLAB_BUILD_DIR}/go${GOLANG_VERSION}.linux-amd64.tar.gz -C /tmp/
-
-# install gitlab-shell
-echo "Downloading gitlab-shell v.${GITLAB_SHELL_VERSION}..."
-mkdir -p ${GITLAB_SHELL_INSTALL_DIR}
-wget -cq ${GITLAB_SHELL_URL} -O ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2
-tar xf ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2 --strip 1 -C ${GITLAB_SHELL_INSTALL_DIR}
-rm -rf ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2
-chown -R ${GITLAB_USER}: ${GITLAB_SHELL_INSTALL_DIR}
-
-cd ${GITLAB_SHELL_INSTALL_DIR}
-exec_as_git cp -a config.yml.example config.yml
-
-echo "Compiling gitlab-shell golang executables..."
-exec_as_git bundle config set --local deployment 'true'
-exec_as_git bundle config set --local with 'development test'
-exec_as_git bundle install -j"$(nproc)"
-exec_as_git "PATH=$PATH" make verify setup
-
-# remove unused repositories directory created by gitlab-shell install
-rm -rf ${GITLAB_HOME}/repositories
-
-# build gitlab-workhorse
-echo "Build gitlab-workhorse"
-git config --global --add safe.directory /home/git/gitlab
-make -C ${GITLAB_WORKHORSE_BUILD_DIR} install
-# clean up
-rm -rf ${GITLAB_WORKHORSE_BUILD_DIR}
-
-# download gitlab-pages
-echo "Downloading gitlab-pages v.${GITLAB_PAGES_VERSION}..."
-git clone -q -b v${GITLAB_PAGES_VERSION} --depth 1 ${GITLAB_PAGES_URL} ${GITLAB_PAGES_BUILD_DIR}
-
-# install gitlab-pages
-make -C ${GITLAB_PAGES_BUILD_DIR}
-cp -a ${GITLAB_PAGES_BUILD_DIR}/gitlab-pages /usr/local/bin/
-
-# clean up
-rm -rf ${GITLAB_PAGES_BUILD_DIR}
-
-# download and build gitaly
-echo "Downloading gitaly v.${GITALY_SERVER_VERSION}..."
-git clone -q -b v${GITALY_SERVER_VERSION} --depth 1 ${GITLAB_GITALY_URL} ${GITLAB_GITALY_BUILD_DIR}
-
-# install gitaly
-make -C ${GITLAB_GITALY_BUILD_DIR} install
-mkdir -p ${GITLAB_GITALY_INSTALL_DIR}
-# The following line causes some issues. However, according to
-# <https://gitlab.com/gitlab-org/gitaly/-/merge_requests/5512> and 
-# <https://gitlab.com/gitlab-org/gitaly/-/merge_requests/5671> there seems to
-# be some attempts to remove ruby from gitaly.
-#
-# cp -a ${GITLAB_GITALY_BUILD_DIR}/ruby ${GITLAB_GITALY_INSTALL_DIR}/
-cp -a ${GITLAB_GITALY_BUILD_DIR}/config.toml.example ${GITLAB_GITALY_INSTALL_DIR}/config.toml
-rm -rf ${GITLAB_GITALY_INSTALL_DIR}/ruby/vendor/bundle/ruby/**/cache
-chown -R ${GITLAB_USER}: ${GITLAB_GITALY_INSTALL_DIR}
-
-# install git bundled with gitaly.
-make -C ${GITLAB_GITALY_BUILD_DIR} git GIT_PREFIX=/usr/local
-
-# clean up
-rm -rf ${GITLAB_GITALY_BUILD_DIR}
-
-# remove go
-go clean --modcache
-rm -rf ${GITLAB_BUILD_DIR}/go${GOLANG_VERSION}.linux-amd64.tar.gz ${GOROOT}
 
 # remove HSTS config from the default headers, we configure it in nginx
 exec_as_git sed -i "/headers\['Strict-Transport-Security'\]/d" ${GITLAB_INSTALL_DIR}/app/controllers/application_controller.rb
