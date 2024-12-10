@@ -2,63 +2,60 @@ ARG VERSION=17.6.0
 ARG GOLANG_VERSION=1.23.3
 
 FROM golang:${GOLANG_VERSION} AS builder_gitlab_shell
-COPY ./env.sh ./env.sh
+COPY env.sh /tmp/env.sh
 RUN <<EOR
-    source ./env.sh
+    chmod +x /tmp/env.sh && . /tmp/env.sh
     # install gitlab-shell
     echo "Downloading gitlab-shell v.${GITLAB_SHELL_VERSION}..."
-    mkdir -p ${GITLAB_SHELL_INSTALL_DIR}
-    wget -cq ${GITLAB_SHELL_URL} -O ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2
-    tar xf ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2 --strip 1 -C ${GITLAB_SHELL_INSTALL_DIR}
-    rm -rf ${GITLAB_BUILD_DIR}/gitlab-shell-${GITLAB_SHELL_VERSION}.tar.bz2
-    chown -R ${GITLAB_USER}: ${GITLAB_SHELL_INSTALL_DIR}
+    GITLAB_SHELL_BUILD_DIR=/tmp/gitlab-shell
+    git clone -q -b v${GITLAB_SHELL_VERSION} --depth 1 ${GITLAB_SHELL_URL} ${GITLAB_SHELL_BUILD_DIR}
 
-    cd ${GITLAB_SHELL_INSTALL_DIR}
-    exec_as_git cp -a config.yml.example config.yml
+    cd ${GITLAB_SHELL_BUILD_DIR}
+    cp -a config.yml.example config.yml
 
     echo "Compiling gitlab-shell golang executables..."
-    exec_as_git bundle config set --local deployment 'true'
-    exec_as_git bundle config set --local with 'development test'
-    exec_as_git bundle install -j"$(nproc)"
-    exec_as_git "PATH=$PATH" make verify setup
+    "PATH=$PATH" make verify setup
 
     # remove unused repositories directory created by gitlab-shell install
     rm -rf ${GITLAB_HOME}/repositories
 EOR
 
 FROM golang:${GOLANG_VERSION} AS builder_gitaly
-COPY ./env.sh ./env.sh
+COPY env.sh /tmp/env.sh
 RUN <<EOR
-    source ./env.sh
+    chmod +x /tmp/env.sh && . /tmp/env.sh
     GITLAB_GITALY_BUILD_DIR=/tmp/gitaly
     # download and build gitaly
     echo "Downloading gitaly v.${GITALY_SERVER_VERSION}..."
     git clone -q -b v${GITALY_SERVER_VERSION} --depth 1 ${GITLAB_GITALY_URL} ${GITLAB_GITALY_BUILD_DIR}
 
+    # add repository to support libssl 1.x
+    # echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list.d/bullseye.list
+
+    # install dependency
+    GITALY_BUILD_DEPENDENCIES="cmake libssl-dev pkg-config"
+    GITALY_GIT_BUILD_DEPENDENCIES="dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev asciidoc libffi-dev xmlto docbook2x install-info libpcre2-dev"
+
+    apt-get update
+    # fixme : libssl-dev is libssl 3.x on latest debian (bookworm)
+    # and may not compatible with 1.x (used in gitlab image)
+    apt-get install -y --no-install-recommends ${GITALY_BUILD_DEPENDENCIES} ${GITALY_GIT_BUILD_DEPENDENCIES}
+        
     # install gitaly
     make -C ${GITLAB_GITALY_BUILD_DIR} install
     mkdir -p ${GITLAB_GITALY_INSTALL_DIR}
-    # The following line causes some issues. However, according to
-    # <https://gitlab.com/gitlab-org/gitaly/-/merge_requests/5512> and 
-    # <https://gitlab.com/gitlab-org/gitaly/-/merge_requests/5671> there seems to
-    # be some attempts to remove ruby from gitaly.
-    #
-    # cp -a ${GITLAB_GITALY_BUILD_DIR}/ruby ${GITLAB_GITALY_INSTALL_DIR}/
     cp -a ${GITLAB_GITALY_BUILD_DIR}/config.toml.example ${GITLAB_GITALY_INSTALL_DIR}/config.toml
     rm -rf ${GITLAB_GITALY_INSTALL_DIR}/ruby/vendor/bundle/ruby/**/cache
-    chown -R ${GITLAB_USER}: ${GITLAB_GITALY_INSTALL_DIR}
 
     # install git bundled with gitaly.
     make -C ${GITLAB_GITALY_BUILD_DIR} git GIT_PREFIX=/usr/local
-
-    # clean up
-    rm -rf ${GITLAB_GITALY_BUILD_DIR}
 EOR
 
 FROM golang:${GOLANG_VERSION} AS builder_gitlab_pages
-COPY ./env.sh ./env.sh
+COPY env.sh /tmp/env.sh
 RUN <<EOR
-    source ./env.sh
+    chmod +x /tmp/env.sh && . /tmp/env.sh
+    printenv
     # download gitlab-pages
     GITLAB_PAGES_BUILD_DIR=/tmp/gitlab-pages
     echo "Downloading gitlab-pages v.${GITLAB_PAGES_VERSION}..."
@@ -67,22 +64,35 @@ RUN <<EOR
 EOR
 
 FROM golang:${GOLANG_VERSION} AS builder_gitlab_workhorse
-COPY ./env.sh ./env.sh
+COPY env.sh /tmp/env.sh
 RUN <<EOR
-    source ./env.sh
+    chmod +x /tmp/env.sh && . /tmp/env.sh
+    GITLAB_WORKHORSE_BUILD_DIR=/tmp/gitlab
+    # shallow clone gitlab-foss
+    echo "Cloning gitlab-foss v.${GITLAB_VERSION}..."
+    git clone -q -b v${GITLAB_VERSION} --depth 1 ${GITLAB_CLONE_URL} ${GITLAB_WORKHORSE_BUILD_DIR}
+    
     # build gitlab-workhorse
     echo "Build gitlab-workhorse"
-    git config --global --add safe.directory /home/git/gitlab
+    git config --global --add safe.directory /tmp/gitlab
     make -C ${GITLAB_WORKHORSE_BUILD_DIR} install
     # clean up
     rm -rf ${GITLAB_WORKHORSE_BUILD_DIR}
 EOR
 
 FROM ubuntu:focal-20241011 AS main
-COPY ./env.sh ./env.sh
 
-RUN source ./env.sh \
- && apt-get update \
+ENV GITLAB_USER="git" \
+    GITLAB_HOME="/home/git" \
+    GITLAB_LOG_DIR="/var/log/gitlab" \
+    GITLAB_CACHE_DIR="/etc/docker-gitlab" \
+    GITLAB_DATA_DIR="${GITLAB_HOME}/data" \
+    RAILS_ENV=production \
+    NODE_ENV=production
+
+COPY env.sh /tmp/env.sh
+
+RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     wget ca-certificates apt-transport-https gnupg2 \
  && apt-get upgrade -y \
@@ -116,11 +126,6 @@ RUN set -ex && \
  && DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder_gitlab_shell ${GITLAB_SHELL_INSTALL_DIR} ${GITLAB_SHELL_INSTALL_DIR}
-COPY --from=builder_gitaly ${GITLAB_GITALY_INSTALL_DIR} ${GITLAB_GITALY_INSTALL_DIR}
-COPY --from=builder_gitaly /usr/local/bin/git /usr/local/bin/git
-COPY --from=builder_gitlab_pages ${GITLAB_PAGES_BUILD_DIR}/gitlab-pages /usr/local/bin/gitlab-pages
- 
 COPY assets/build/ ${GITLAB_BUILD_DIR}/
 RUN bash ${GITLAB_BUILD_DIR}/install.sh
 
@@ -128,6 +133,14 @@ COPY assets/runtime/ ${GITLAB_RUNTIME_DIR}/
 COPY entrypoint.sh /sbin/entrypoint.sh
 RUN chmod 755 /sbin/entrypoint.sh
 
+COPY --from=builder_gitlab_shell /tmp/gitlab-shell ${GITLAB_SHELL_INSTALL_DIR}
+COPY --from=builder_gitaly /tmp/gitaly /home/gitaly
+COPY --from=builder_gitaly /usr/local/bin/git /usr/local/bin/git
+COPY --from=builder_gitlab_pages /tmp/gitlab-pages/bin/gitlab-pages /usr/local/bin/gitlab-pages
+# executables are listed in gitlab/workhorse/Makefile as EXE_ALL = gitlab-resize-image gitlab-zip-cat gitlab-zip-metadata gitlab-workhorse
+# will be installed to /usr/local/bin by default
+COPY --from=builder_gitlab_workhorse /usr/local/bin/* /usr/local/bin/
+ 
 ENV prometheus_multiproc_dir="/dev/shm"
 
 ARG BUILD_DATE

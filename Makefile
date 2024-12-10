@@ -11,12 +11,12 @@ help:
 	@echo "   5. make purge        - stop and remove the container"
 
 build:
-	@docker build --tag=sameersbn/gitlab . \
+	@DOCKER_BUILDKIT=1 docker build --tag=sameersbn/gitlab . \
 		--build-arg BUILD_DATE="$(shell date +"%Y-%m-%d %H:%M:%S%:z")" \
 		--build-arg VCS_REF=$(shell git rev-parse --short HEAD)
 
 release: build
-	@docker build --tag=sameersbn/gitlab:$(shell cat VERSION) . \
+	@DOCKER_BUILDKIT=1 docker build --tag=sameersbn/gitlab:$(shell cat VERSION) . \
 		--build-arg BUILD_DATE="$(shell date +"%Y-%m-%d %H:%M:%S%:z")" \
 		--build-arg VCS_REF=$(git describe --tags --always)
 
