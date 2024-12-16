@@ -14,7 +14,7 @@ RUN <<EOR
     cp -a config.yml.example config.yml
 
     echo "Compiling gitlab-shell golang executables..."
-    "PATH=$PATH" make verify setup
+    PATH="$PATH" make verify setup
 
     # remove unused repositories directory created by gitlab-shell install
     rm -rf ${GITLAB_HOME}/repositories
@@ -63,34 +63,85 @@ RUN <<EOR
     make -C ${GITLAB_PAGES_BUILD_DIR}
 EOR
 
-FROM golang:${GOLANG_VERSION} AS builder_gitlab_workhorse
-COPY env.sh /tmp/env.sh
-RUN <<EOR
-    chmod +x /tmp/env.sh && . /tmp/env.sh
-    GITLAB_WORKHORSE_BUILD_DIR=/tmp/gitlab
-    # shallow clone gitlab-foss
-    echo "Cloning gitlab-foss v.${GITLAB_VERSION}..."
-    git clone -q -b v${GITLAB_VERSION} --depth 1 ${GITLAB_CLONE_URL} ${GITLAB_WORKHORSE_BUILD_DIR}
-    
-    # build gitlab-workhorse
-    echo "Build gitlab-workhorse"
-    git config --global --add safe.directory /tmp/gitlab
-    make -C ${GITLAB_WORKHORSE_BUILD_DIR} install
-    # clean up
-    rm -rf ${GITLAB_WORKHORSE_BUILD_DIR}
-EOR
-
-FROM ubuntu:focal-20241011 AS main
-
-ENV GITLAB_USER="git" \
+FROM ubuntu:focal-20241011 AS main_base
+ARG VERSION
+ENV VERSION=${VERSION} \
+    GITLAB_USER="git" \
     GITLAB_HOME="/home/git" \
     GITLAB_LOG_DIR="/var/log/gitlab" \
     GITLAB_CACHE_DIR="/etc/docker-gitlab" \
-    GITLAB_DATA_DIR="${GITLAB_HOME}/data" \
     RAILS_ENV=production \
     NODE_ENV=production
 
+ENV GITLAB_BUILD_DIR="${GITLAB_CACHE_DIR}/build" \
+    GITLAB_DATA_DIR="${GITLAB_HOME}/data" \
+    GITLAB_INSTALL_DIR="${GITLAB_HOME}/gitlab" \
+    GITLAB_RUNTIME_DIR="${GITLAB_CACHE_DIR}/runtime" \
+    GITLAB_SHELL_INSTALL_DIR="${GITLAB_HOME}/gitlab-shell"
+
 COPY env.sh /tmp/env.sh
+COPY assets/build/ ${GITLAB_BUILD_DIR}/
+COPY assets/runtime/ ${GITLAB_RUNTIME_DIR}/
+
+RUN <<EOR
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+        sudo
+EOR
+
+RUN <<EOR
+    export VERSION=${VERSION}
+    chmod +x /tmp/env.sh && . /tmp/env.sh
+
+    # add ${GITLAB_USER} user
+    adduser --disabled-login --gecos 'GitLab' ${GITLAB_USER}
+    passwd -d ${GITLAB_USER}
+
+    exec_as_git() {
+        if [ $(whoami) == "${GITLAB_USER}" ]; then
+            "$@"
+        else
+            sudo -HEu ${GITLAB_USER} "$@"
+        fi
+    }
+
+    # configure git for ${GITLAB_USER}
+    exec_as_git git config --global core.autocrlf input
+    exec_as_git git config --global gc.auto 0
+    exec_as_git git config --global repack.writeBitmaps true
+    exec_as_git git config --global receive.advertisePushOptions true
+    exec_as_git git config --global advice.detachedHead false
+    exec_as_git git config --global --add safe.directory /home/git/gitlab
+
+    # shallow clone gitlab-foss
+    echo "Cloning gitlab-foss v.${GITLAB_VERSION}..."
+    exec_as_git git clone -q -b v${GITLAB_VERSION} --depth 1 ${GITLAB_CLONE_URL} ${GITLAB_INSTALL_DIR}
+    
+    find "${GITLAB_BUILD_DIR}/patches/gitlabhq" -name "*.patch" | while read -r patch_file; do
+      printf "Applying patch %s for gitlab-foss...\n" "${patch_file}"
+      exec_as_git git -C ${GITLAB_INSTALL_DIR} apply --ignore-whitespace < "${patch_file}"
+    done
+
+    # remove HSTS config from the default headers, we configure it in nginx
+    exec_as_git sed -i "/headers\['Strict-Transport-Security'\]/d" ${GITLAB_INSTALL_DIR}/app/controllers/application_controller.rb
+    
+    # revert `rake gitlab:setup` changes from gitlabhq/gitlabhq@a54af831bae023770bf9b2633cc45ec0d5f5a66a
+    exec_as_git sed -i 's/db:reset/db:setup/' ${GITLAB_INSTALL_DIR}/lib/tasks/gitlab/setup.rake
+    
+    # change SSH_ALGORITHM_PATH - we have moved host keys in ${GITLAB_DATA_DIR}/ssh/ to persist them
+    exec_as_git sed -i "s:/etc/ssh/:/${GITLAB_DATA_DIR}/ssh/:g" ${GITLAB_INSTALL_DIR}/app/models/instance_configuration.rb
+EOR
+
+FROM golang:${GOLANG_VERSION} AS builder_gitlab_workhorse
+COPY --from=main_base /home/git/gitlab/workhorse /tmp/workhorse
+RUN <<EOR
+    # build gitlab-workhorse
+    echo "Build gitlab-workhorse"
+    git config --global --add safe.directory /tmp/workhorse
+    make -C /tmp/workhorse install
+EOR
+
+FROM main_base AS main
 
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
@@ -113,7 +164,7 @@ RUN set -ex && \
  && set -ex \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-      sudo supervisor logrotate locales curl \
+      supervisor logrotate locales curl \
       nginx openssh-server postgresql-contrib redis-tools \
       postgresql-client-13 postgresql-client-14 postgresql-client-15 postgresql-client-16 \
       python3 python3-docutils nodejs yarn gettext-base graphicsmagick \
@@ -126,10 +177,8 @@ RUN set -ex && \
  && DEBIAN_FRONTEND=noninteractive dpkg-reconfigure locales \
  && rm -rf /var/lib/apt/lists/*
 
-COPY assets/build/ ${GITLAB_BUILD_DIR}/
 RUN bash ${GITLAB_BUILD_DIR}/install.sh
 
-COPY assets/runtime/ ${GITLAB_RUNTIME_DIR}/
 COPY entrypoint.sh /sbin/entrypoint.sh
 RUN chmod 755 /sbin/entrypoint.sh
 

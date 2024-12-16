@@ -59,47 +59,14 @@ paxctl -cvm "$(command -v node)"
 # remove the host keys generated during openssh-server installation
 rm -rf /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
 
-# add ${GITLAB_USER} user
-adduser --disabled-login --gecos 'GitLab' ${GITLAB_USER}
-passwd -d ${GITLAB_USER}
-
 # set PATH (fixes cron job PATH issues)
 cat >> ${GITLAB_HOME}/.profile <<EOF
 PATH=/usr/local/sbin:/usr/local/bin:\$PATH
 EOF
 
-# configure git for ${GITLAB_USER}
-exec_as_git git config --global core.autocrlf input
-exec_as_git git config --global gc.auto 0
-exec_as_git git config --global repack.writeBitmaps true
-exec_as_git git config --global receive.advertisePushOptions true
-exec_as_git git config --global advice.detachedHead false
-exec_as_git git config --global --add safe.directory /home/git/gitlab
-
-# shallow clone gitlab-foss
-echo "Cloning gitlab-foss v.${GITLAB_VERSION}..."
-exec_as_git git clone -q -b v${GITLAB_VERSION} --depth 1 ${GITLAB_CLONE_URL} ${GITLAB_INSTALL_DIR}
-
-find "${GITLAB_BUILD_DIR}/patches/gitlabhq" -name "*.patch" | while read -r patch_file; do
-  printf "Applying patch %s for gitlab-foss...\n" "${patch_file}"
-  exec_as_git git -C ${GITLAB_INSTALL_DIR} apply --ignore-whitespace < "${patch_file}"
-done
-
-GITLAB_SHELL_VERSION=${GITLAB_SHELL_VERSION:-$(cat ${GITLAB_INSTALL_DIR}/GITLAB_SHELL_VERSION)}
-GITLAB_PAGES_VERSION=${GITLAB_PAGES_VERSION:-$(cat ${GITLAB_INSTALL_DIR}/GITLAB_PAGES_VERSION)}
-
 # install bundler: use version specified in Gemfile.lock
 BUNDLER_VERSION="$(grep "BUNDLED WITH" ${GITLAB_INSTALL_DIR}/Gemfile.lock -A 1 | grep -v "BUNDLED WITH" | tr -d "[:space:]")"
 gem install bundler:"${BUNDLER_VERSION}"
-
-# remove HSTS config from the default headers, we configure it in nginx
-exec_as_git sed -i "/headers\['Strict-Transport-Security'\]/d" ${GITLAB_INSTALL_DIR}/app/controllers/application_controller.rb
-
-# revert `rake gitlab:setup` changes from gitlabhq/gitlabhq@a54af831bae023770bf9b2633cc45ec0d5f5a66a
-exec_as_git sed -i 's/db:reset/db:setup/' ${GITLAB_INSTALL_DIR}/lib/tasks/gitlab/setup.rake
-
-# change SSH_ALGORITHM_PATH - we have moved host keys in ${GITLAB_DATA_DIR}/ssh/ to persist them
-exec_as_git sed -i "s:/etc/ssh/:/${GITLAB_DATA_DIR}/ssh/:g" ${GITLAB_INSTALL_DIR}/app/models/instance_configuration.rb
 
 cd ${GITLAB_INSTALL_DIR}
 
