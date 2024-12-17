@@ -86,7 +86,9 @@ COPY assets/runtime/ ${GITLAB_RUNTIME_DIR}/
 RUN <<EOR
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-        sudo
+        sudo git wget ca-certificates apt-transport-https gnupg2
+    apt-get upgrade -y
+    rm -rf /var/lib/apt/lists/*
 EOR
 
 RUN <<EOR
@@ -98,7 +100,7 @@ RUN <<EOR
     passwd -d ${GITLAB_USER}
 
     exec_as_git() {
-        if [ $(whoami) == "${GITLAB_USER}" ]; then
+        if [ $(whoami) = "${GITLAB_USER}" ]; then
             "$@"
         else
             sudo -HEu ${GITLAB_USER} "$@"
@@ -142,12 +144,6 @@ RUN <<EOR
 EOR
 
 FROM main_base AS main
-
-RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-    wget ca-certificates apt-transport-https gnupg2 \
- && apt-get upgrade -y \
- && rm -rf /var/lib/apt/lists/*
 
 RUN set -ex && \
     mkdir -p /etc/apt/keyrings \
