@@ -18,8 +18,19 @@ RUN <<EOR
     cp -a config.yml.example config.yml
 
     echo "Compiling gitlab-shell golang executables..."
-    PATH="$PATH" make verify setup
-
+    # "setup" will invoke script gitlab-shell/support/make_necessary_dirs that is written in ruby
+    # To avoid it, just call build command directly here
+    # Execute such directory creation (for .ssh/authorized_keys) in main image
+    # PATH="$PATH" make verify setup
+    ## global variable in MakeFile
+    VERSION_STRING=$(git describe --match v* 2>/dev/null || awk '$$0="v"$$0' VERSION 2>/dev/null || echo unknown)
+    BUILD_DATE=$(date -u +%Y%m%d.%H%M%S)
+    GOBUILD_FLAGS="-ldflags \"-X main.Version=${VERSION_STRING} -X main.BuildTime=${BUILD_TIME}\" -tags \"${GO_TAGS}\" -mod=mod"
+    ## content of target "bin"
+    mkdir -p bin
+    ## content of target "bin/gitlab-shell"
+    go build ${GOBUILD_FLAGS} -o ${PWD}/bin ./cmd/...
+    
     # remove unused repositories directory created by gitlab-shell install
     rm -rf ${GITLAB_HOME}/repositories
 EOR
