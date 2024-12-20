@@ -1,10 +1,14 @@
 ARG VERSION=17.6.0
 ARG GOLANG_VERSION=1.23.3
 
-FROM golang:${GOLANG_VERSION} AS builder_gitlab_shell
+FROM golang:${GOLANG_VERSION} AS golang_builder_base
+ENV CGO_ENABLED=0
 COPY env.sh /tmp/env.sh
+RUN chmod +x /tmp/env.sh
+
+FROM golang_builder_base AS builder_gitlab_shell
 RUN <<EOR
-    chmod +x /tmp/env.sh && . /tmp/env.sh
+    . /tmp/env.sh
     # install gitlab-shell
     echo "Downloading gitlab-shell v.${GITLAB_SHELL_VERSION}..."
     GITLAB_SHELL_BUILD_DIR=/tmp/gitlab-shell
@@ -20,10 +24,9 @@ RUN <<EOR
     rm -rf ${GITLAB_HOME}/repositories
 EOR
 
-FROM golang:${GOLANG_VERSION} AS builder_gitaly
-COPY env.sh /tmp/env.sh
+FROM golang_builder_base AS builder_gitaly
 RUN <<EOR
-    chmod +x /tmp/env.sh && . /tmp/env.sh
+    . /tmp/env.sh
     GITLAB_GITALY_BUILD_DIR=/tmp/gitaly
     # download and build gitaly
     echo "Downloading gitaly v.${GITALY_SERVER_VERSION}..."
@@ -51,10 +54,9 @@ RUN <<EOR
     make -C ${GITLAB_GITALY_BUILD_DIR} git GIT_PREFIX=/usr/local
 EOR
 
-FROM golang:${GOLANG_VERSION} AS builder_gitlab_pages
-COPY env.sh /tmp/env.sh
+FROM golang_builder_base AS builder_gitlab_pages
 RUN <<EOR
-    chmod +x /tmp/env.sh && . /tmp/env.sh
+    . /tmp/env.sh
     printenv
     # download gitlab-pages
     GITLAB_PAGES_BUILD_DIR=/tmp/gitlab-pages
@@ -134,7 +136,7 @@ RUN <<EOR
     exec_as_git sed -i "s:/etc/ssh/:/${GITLAB_DATA_DIR}/ssh/:g" ${GITLAB_INSTALL_DIR}/app/models/instance_configuration.rb
 EOR
 
-FROM golang:${GOLANG_VERSION} AS builder_gitlab_workhorse
+FROM golang_builder_base AS builder_gitlab_workhorse
 COPY --from=main_base /home/git/gitlab/workhorse /tmp/workhorse
 RUN <<EOR
     # build gitlab-workhorse
