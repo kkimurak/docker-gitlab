@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -Ceu
 
 chmod +x /tmp/env.sh
 . /tmp/env.sh
@@ -44,6 +44,7 @@ done
 make -j"$(nproc)"
 make install
 cd "$PWD_ORG" && rm -rf /tmp/ruby
+exec_as_git bundle config set --global ignore_messages true
 
 # upgrade rubygems on demand
 gem update --no-document --system "${RUBYGEMS_VERSION}"
@@ -69,6 +70,8 @@ BUNDLER_VERSION="$(grep "BUNDLED WITH" ${GITLAB_INSTALL_DIR}/Gemfile.lock -A 1 |
 gem install bundler:"${BUNDLER_VERSION}"
 
 cd ${GITLAB_INSTALL_DIR}
+
+exec_as_git mkdir -p ${GITLAB_GITALY_INSTALL_DIR}
 
 # install gems, use local cache if available
 if [[ -d ${GEM_CACHE_DIR} ]]; then

@@ -25,14 +25,14 @@ RUN <<EOR
     ## global variable in MakeFile
     VERSION_STRING=$(git describe --match v* 2>/dev/null || awk '$$0="v"$$0' VERSION 2>/dev/null || echo unknown)
     BUILD_DATE=$(date -u +%Y%m%d.%H%M%S)
-    GOBUILD_FLAGS="-ldflags \"-X main.Version=${VERSION_STRING} -X main.BuildTime=${BUILD_TIME}\" -tags \"${GO_TAGS}\" -mod=mod"
+    GOBUILD_FLAGS='-ldflags "-X main.Version=${VERSION_STRING} -X main.BuildTime=${BUILD_TIME}" -tags "${GO_TAGS}" -mod=mod'
     ## content of target "bin"
     mkdir -p bin
     ## content of target "bin/gitlab-shell"
     go build ${GOBUILD_FLAGS} -o ${PWD}/bin ./cmd/...
-    
-    # remove unused repositories directory created by gitlab-shell install
-    rm -rf ${GITLAB_HOME}/repositories
+
+    # remove go build cache and .git/ (as repository will be copied to main image as is and want to reduce image size)
+    rm -rf _build/ .git/
 EOR
 
 FROM golang_builder_base AS builder_gitaly
@@ -63,12 +63,13 @@ RUN <<EOR
 
     # install git bundled with gitaly.
     make -C ${GITLAB_GITALY_BUILD_DIR} git GIT_PREFIX=/usr/local
+    # remove go build cache and .git/ (as repository will be copied to main image as is and want to reduce image size)
+    rm -rf _build/ .git/
 EOR
 
 FROM golang_builder_base AS builder_gitlab_pages
 RUN <<EOR
     . /tmp/env.sh
-    printenv
     # download gitlab-pages
     GITLAB_PAGES_BUILD_DIR=/tmp/gitlab-pages
     echo "Downloading gitlab-pages v.${GITLAB_PAGES_VERSION}..."
@@ -88,6 +89,7 @@ ENV VERSION=${VERSION} \
 
 ENV GITLAB_BUILD_DIR="${GITLAB_CACHE_DIR}/build" \
     GITLAB_DATA_DIR="${GITLAB_HOME}/data" \
+    GITLAB_GITALY_INSTALL_DIR="${GITLAB_HOME}/gitaly" \
     GITLAB_INSTALL_DIR="${GITLAB_HOME}/gitlab" \
     GITLAB_RUNTIME_DIR="${GITLAB_CACHE_DIR}/runtime" \
     GITLAB_SHELL_INSTALL_DIR="${GITLAB_HOME}/gitlab-shell"
@@ -105,10 +107,8 @@ RUN <<EOR
 EOR
 
 RUN <<EOR
-    export VERSION=${VERSION}
     chmod +x /tmp/env.sh && . /tmp/env.sh
 
-    # add ${GITLAB_USER} user
     adduser --disabled-login --gecos 'GitLab' ${GITLAB_USER}
     passwd -d ${GITLAB_USER}
 
@@ -145,14 +145,16 @@ RUN <<EOR
     
     # change SSH_ALGORITHM_PATH - we have moved host keys in ${GITLAB_DATA_DIR}/ssh/ to persist them
     exec_as_git sed -i "s:/etc/ssh/:/${GITLAB_DATA_DIR}/ssh/:g" ${GITLAB_INSTALL_DIR}/app/models/instance_configuration.rb
+    
+    rm -rf ${GITLAB_INSTALL_DIR}.git/
 EOR
 
 FROM golang_builder_base AS builder_gitlab_workhorse
 COPY --from=main_base /home/git/gitlab/workhorse /tmp/workhorse
+COPY --from=main_base /home/git/gitlab/VERSION /tmp/workhorse/VERSION
 RUN <<EOR
     # build gitlab-workhorse
     echo "Build gitlab-workhorse"
-    git config --global --add safe.directory /tmp/workhorse
     make -C /tmp/workhorse install
 EOR
 
@@ -179,7 +181,7 @@ RUN set -ex && \
       python3 python3-docutils nodejs yarn gettext-base graphicsmagick \
       libpq5 zlib1g libyaml-0-2 libssl1.1 \
       libgdbm6 libreadline8 libncurses5 libffi7 \
-      libxml2 libxslt1.1 libcurl4 libicu66 libre2-dev tzdata unzip libimage-exiftool-perl \
+      libxml2 libxslt1.1 libcurl4 libcurl4-gnutls-dev libicu66 libre2-dev tzdata unzip libimage-exiftool-perl \
       libmagic1 \
  && update-locale LANG=C.UTF-8 LC_MESSAGES=POSIX \
  && locale-gen en_US.UTF-8 \
@@ -192,12 +194,10 @@ COPY entrypoint.sh /sbin/entrypoint.sh
 RUN chmod 755 /sbin/entrypoint.sh
 
 COPY --from=builder_gitlab_shell /tmp/gitlab-shell ${GITLAB_SHELL_INSTALL_DIR}
-COPY --from=builder_gitaly /tmp/gitaly /home/gitaly
-COPY --from=builder_gitaly /usr/local/bin/git /usr/local/bin/git
-COPY --from=builder_gitlab_pages /tmp/gitlab-pages/bin/gitlab-pages /usr/local/bin/gitlab-pages
-# executables are listed in gitlab/workhorse/Makefile as EXE_ALL = gitlab-resize-image gitlab-zip-cat gitlab-zip-metadata gitlab-workhorse
-# will be installed to /usr/local/bin by default
-COPY --from=builder_gitlab_workhorse /usr/local/bin/* /usr/local/bin/
+COPY --from=builder_gitaly /usr/local/bin/ /usr/local/bin/
+COPY --from=builder_gitaly
+COPY --from=builder_gitlab_pages /tmp/gitlab-pages/bin/ /usr/local/bin/
+COPY --from=builder_gitlab_workhorse /usr/local/bin/ /usr/local/bin/
  
 ENV prometheus_multiproc_dir="/dev/shm"
 
