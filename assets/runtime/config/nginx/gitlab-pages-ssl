@@ -8,39 +8,41 @@ server {
   ## to be served if you visit any address that your server responds to, eg.
   ## the ip address of the server (http://x.x.x.x/)
   listen 0.0.0.0:80;
-  listen [::]:80;
+  listen [::]:80 ipv6only=on;
 
   ## Replace this with something like pages.gitlab.com
-  server_name ~^.*{{GITLAB_PAGES_DOMAIN}};
+  server_name ~^.*\.YOUR_GITLAB_PAGES\.DOMAIN$;
   server_tokens off; ## Don't show the nginx version number, a security best practice
 
-  return 301 https://$host:{{GITLAB_PORT}}$request_uri;
+  return 301  https://$http_host$request_uri;
 
-  access_log  {{GITLAB_LOG_DIR}}/nginx/gitlab_pages_access.log;
-  error_log   {{GITLAB_LOG_DIR}}/nginx/gitlab_pages_error.log;
+  access_log  /var/log/nginx/gitlab_pages_access.log;
+  error_log   /var/log/nginx/gitlab_pages_access.log;
 }
 
 ## Pages serving host
 server {
   listen 0.0.0.0:443 ssl;
-  listen [::]:443 ssl;
-  http2 on;
+  listen [::]:443 ipv6only=on ssl http2;
 
   ## Replace this with something like pages.gitlab.com
-  server_name ~^.*{{GITLAB_PAGES_DOMAIN}};
+  server_name ~^.*\.YOUR_GITLAB_PAGES\.DOMAIN$;
   server_tokens off; ## Don't show the nginx version number, a security best practice
 
   ## Strong SSL Security
   ## https://raymii.org/s/tutorials/Strong_SSL_Security_On_nginx.html & https://cipherli.st/
-  ssl_certificate {{SSL_PAGES_CERT_PATH}};
-  ssl_certificate_key {{SSL_PAGES_KEY_PATH}};
+  ssl_certificate /etc/nginx/ssl/gitlab-pages.crt;
+  ssl_certificate_key /etc/nginx/ssl/gitlab-pages.key;
 
-  # GitLab needs backwards compatible ciphers to retain compatibility with Java IDEs
-  ssl_ciphers "{{SSL_PAGES_CIPHERS}}";
-  ssl_protocols {{SSL_PAGES_PROTOCOLS}};
-  ssl_prefer_server_ciphers on;
+  ssl_session_timeout 1d;
   ssl_session_cache shared:SSL:10m;
-  ssl_session_timeout 5m;
+  ssl_session_tickets off;
+
+  # These settings are in line with the modern settings from https://ssl-config.mozilla.org/
+  # and are supported by all still-supported browsers since 2019. If you have specific needs
+  # for older settings, please consult the intermediate settings there.
+  ssl_protocols TLSv1.3;
+  ssl_prefer_server_ciphers off;
 
   ## See app/controllers/application_controller.rb for headers set
 
@@ -53,12 +55,10 @@ server {
   # ssl_stapling_verify on;
   # ssl_trusted_certificate /etc/nginx/ssl/stapling.trusted.crt;
 
-  ## [Optional] Generate a stronger DHE parameter:
-  ##   sudo openssl dhparam -out /etc/ssl/certs/dhparam.pem 4096
-  ##
-  ssl_dhparam {{SSL_DHPARAM_PATH}};
+  ## [Optional] Enable HTTP Strict Transport Security
+  # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
 
-  ## Individual nginx logs for this GitLab vhost
+  ## Individual nginx logs for GitLab pages
   access_log  {{GITLAB_LOG_DIR}}/nginx/gitlab_pages_access.log;
   error_log   {{GITLAB_LOG_DIR}}/nginx/gitlab_pages_error.log;
 
@@ -67,8 +67,11 @@ server {
     proxy_set_header    X-Real-IP           $remote_addr;
     proxy_set_header    X-Forwarded-For     $proxy_add_x_forwarded_for;
     proxy_set_header    X-Forwarded-Proto   $scheme;
+
+    proxy_cache off;
+
     # The same address as passed to GitLab Pages: `-listen-proxy`
-    proxy_pass          http://localhost:8090/;
+    proxy_pass http://localhost:8090/;
   }
 
   # Define custom error pages
