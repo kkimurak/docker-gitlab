@@ -31,11 +31,18 @@ server {
   ssl_certificate {{SSL_REGISTRY_CERT_PATH}};
   ssl_certificate_key {{SSL_REGISTRY_KEY_PATH}};
 
-  ssl_ciphers "{{SSL_REGISTRY_CIPHERS}}";
-  ssl_protocols {{SSL_REGISTRY_PROTOCOLS}};
-  ssl_prefer_server_ciphers on;
-  ssl_session_cache  builtin:1000  shared:SSL:10m;
-  ssl_session_timeout  5m;
+  ssl_session_timeout 1d;
+  ssl_session_cache shared:SSL:10m;
+  ssl_session_tickets off;
+
+  # These settings are in line with the modern settings from https://ssl-config.mozilla.org/
+  # and are supported by all still-supported browsers since 2019. If you have specific needs
+  # for older settings, please consult the intermediate settings there.
+  ssl_protocols TLSv1.3;
+  ssl_prefer_server_ciphers off;
+
+  ## [Optional] Enable HTTP Strict Transport Security
+  # add_header Strict-Transport-Security "max-age=63072000; includeSubDomains";
 
   access_log  {{GITLAB_LOG_DIR}}/nginx/gitlab_registry_access.log;
   error_log   {{GITLAB_LOG_DIR}}/nginx/gitlab_registry_error.log;
