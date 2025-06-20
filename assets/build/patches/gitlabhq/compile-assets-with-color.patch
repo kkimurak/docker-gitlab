@@ -1,0 +1,13 @@
+diff --git a/package.json b/package.json
+index aae087538709..bdf9c250c2ed 100644
+--- a/package.json
++++ b/package.json
+@@ -45,7 +45,7 @@
+     "storybook:start": "./scripts/frontend/start_storybook.sh",
+     "storybook:start:skip-fixtures-update": "./scripts/frontend/start_storybook.sh --skip-fixtures-update",
+     "swagger:validate": "swagger-cli validate",
+-    "webpack": "NODE_OPTIONS=\"${NODE_OPTIONS:=--max-old-space-size=5120}\" webpack --config config/webpack.config.js",
++    "webpack": "NODE_OPTIONS=\"${NODE_OPTIONS:=--max-old-space-size=5120}\" webpack --progress --config config/webpack.config.js",
+     "webpack-vendor": "NODE_OPTIONS=\"${NODE_OPTIONS:=--max-old-space-size=5120}\" webpack --config config/webpack.vendor.config.js",
+     "webpack-prod": "NODE_OPTIONS=\"${NODE_OPTIONS:=--max-old-space-size=5120}\" NODE_ENV=production webpack --config config/webpack.config.js",
+     "vite-prod": "NODE_OPTIONS=\"${NODE_OPTIONS:=--max-old-space-size=8000}\" NODE_ENV=production vite build"
