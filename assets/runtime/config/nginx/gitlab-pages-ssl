@@ -11,13 +11,13 @@ server {
   listen [::]:80 ipv6only=on;
 
   ## Replace this with something like pages.gitlab.com
-  server_name ~^.*\.YOUR_GITLAB_PAGES\.DOMAIN$;
+  server_name ~^.*{{GITLAB_PAGES_DOMAIN}};$;
   server_tokens off; ## Don't show the nginx version number, a security best practice
 
   return 301  https://$http_host$request_uri;
 
-  access_log  /var/log/nginx/gitlab_pages_access.log;
-  error_log   /var/log/nginx/gitlab_pages_access.log;
+  access_log  {{GITLAB_LOG_DIR}}/nginx/gitlab_pages_access.log;
+  error_log   {{GITLAB_LOG_DIR}}/nginx/gitlab_pages_access.log;
 }
 
 ## Pages serving host
@@ -26,7 +26,7 @@ server {
   listen [::]:443 ipv6only=on ssl http2;
 
   ## Replace this with something like pages.gitlab.com
-  server_name ~^.*\.YOUR_GITLAB_PAGES\.DOMAIN$;
+  server_name ~^.*{{GITLAB_PAGES_DOMAIN}}$;
   server_tokens off; ## Don't show the nginx version number, a security best practice
 
   ## Strong SSL Security
