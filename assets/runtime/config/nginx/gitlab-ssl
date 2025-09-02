@@ -173,7 +173,7 @@ server {
   location ~ ^/(404|422|500|502|503)\.html$ {
     # Location to the GitLab's public directory,
     # for Omnibus this would be: /opt/gitlab/embedded/service/gitlab-rails/public
-    root /home/git/gitlab/public;
+    root {{GITLAB_INSTALL_DIR}}/public;
     internal;
   }
 }
