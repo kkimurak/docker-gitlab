@@ -923,6 +923,28 @@ You can specify user-facing URL by setting [`GITLAB_KAS_EXTERNAL`](#gitlab_kas_e
 
 You can specify custom secret file by setting [`GITLAB_KAS_SECRET`](#gitlab_kas_secret). This secret file will be generated if they don't exist.
 
+Here is an example settings for kubernetes rc.yml:
+
+```yaml
+spec:
+  containers:
+  - name: gitlab
+  image: sameersbn/gitlab:latest
+  env:
+  - name: GITLAB_KAS_ENABLED
+    value: "true"
+  - name: GITLAB_AGENT_BUILTIN_KAS_ENABLED
+    value: "true"
+  - name: GITLAB_KAS_EXTERNAL
+    value: wss://gitlab.example.com/gitlab/-/kubernetes-agent/
+  - name: GITLAB_KAS_INTERNAL
+    value: grpc://127.0.0.1:8153
+  - name: GITLAB_KAS_PROXY
+    value: https://gitlab.example.com/gitlab/-/kubernetes-agent/k8s-proxy/
+  - name: OWN_PRIVATE_API_URL
+    value: grpc://127.0.0.1:8155
+```
+
 #### Built-in GitLab-Agent KAS
 
 To control whether launch built-in `gitlab-kas` on container startup or not, you can use configuration parameter [`GITLAB_AGENT_BUILTIN_KAS_ENABLED`](#gitlab_agent_builtin_kas_enabled).
