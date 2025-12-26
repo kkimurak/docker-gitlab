@@ -921,7 +921,59 @@ GitLab agent server for Kubernetes (KAS) is disabled by default, but you can ena
 By default, built-in `gitlab-kas` is also enabled once you enable KAS feature. But you can use an external installation of KAS by setting internal URL for the GitLab backend. Corresponding configuration parameter is [`GITLAB_KAS_INTERNAL`](#gitlab_kas_internal).  
 You can specify user-facing URL by setting [`GITLAB_KAS_EXTERNAL`](#gitlab_kas_external). If you set up proxy URL, use `GITLAB_KAS_PROXY`.
 
-You can specify custom secret file by setting [`GITLAB_KAS_SECRET`](#gitlab_kas_secret). This secret file will be generated if they don't exist.
+You can specify custom secret file by setting [`GITLAB_AGENT_KAS_WEBSOCKET_TOKEN_SECRET_FILE`](#gitlab_agent_kas_websocket_token_secret_file). This secret file will be generated if they don't exist.
+
+Here is an example settings for kubernetes rc.yml:
+
+```yaml
+spec:
+  containers:
+  - name: gitlab
+  image: sameersbn/gitlab:latest
+  env:
+  - name: GITLAB_KAS_ENABLED
+    value: "true"
+  - name: GITLAB_AGENT_BUILTIN_KAS_ENABLED
+    value: "true"
+  - name: GITLAB_KAS_EXTERNAL
+    value: wss://gitlab.example.com/gitlab/-/kubernetes-agent/
+  - name: GITLAB_KAS_INTERNAL
+    value: grpc://127.0.0.1:8153
+  - name: GITLAB_KAS_PROXY
+    value: https://gitlab.example.com/gitlab/-/kubernetes-agent/k8s-proxy/
+  - name: OWN_PRIVATE_API_URL
+    value: grpc://127.0.0.1:8155
+```
+
+and for docker-compose.yml:
+
+```yaml
+services:
+  gitlab:
+    image: sameersbn/gitlab:latest
+  environment:
+    - GITLAB_KAS_ENABLED=true
+    - GITLAB_AGENT_BUILTIN_KAS_ENABLED=true
+    - GITLAB_KAS_EXTERNAL=wss://gitlab.example.com/gitlab/-/kubernetes-agent/
+    - GITLAB_KAS_INTERNAL=grpc://127.0.0.1:8153
+    - GITLAB_KAS_PROXY=https://gitlab.example.com/gitlab/-/kubernetes-agent/k8s-proxy/
+    - OWN_PRIVATE_API_URL=grpc://127.0.0.1:8155
+```
+
+or in another style:
+
+```yaml
+services:
+  gitlab:
+    image: sameersbn/gitlab:latest
+  environment:
+    GITLAB_KAS_ENABLED: "true"
+    GITLAB_AGENT_BUILTIN_KAS_ENABLED: "true"
+    GITLAB_KAS_EXTERNAL: wss://gitlab.example.com/gitlab/-/kubernetes-agent/
+    GITLAB_KAS_INTERNAL: grpc://127.0.0.1:8153
+    GITLAB_KAS_PROXY: https://gitlab.example.com/gitlab/-/kubernetes-agent/k8s-proxy/
+    OWN_PRIVATE_API_URL: grpc://127.0.0.1:8155
+```
 
 #### Built-in GitLab-Agent KAS
 
@@ -1262,7 +1314,7 @@ Cron notation for the GitLab pipeline schedule worker. Defaults to `'19 * * * *'
 
 Enable/Disable GitLab agent server for Kubernetes (KAS). See details on [official documentation](https://docs.gitlab.com/ee/administration/clusters/kas.html). Defaults to `false`
 
-##### `GITLAB_KAS_SECRET`
+##### `GITLAB_AGENT_KAS_API_LISTEN_AUTHENTICATION_SECRET_FILE`
 
 File that contains the secret key for verifying access for GitLab KAS. Defaults to `${GITLAB_INSTALL_DIR}/.gitlab_kas_secret`
 
