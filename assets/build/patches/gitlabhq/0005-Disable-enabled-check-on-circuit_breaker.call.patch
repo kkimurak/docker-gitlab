@@ -1,0 +1,34 @@
+From 388350918562ada869cd22d00c2b12a70c6560aa Mon Sep 17 00:00:00 2001
+From: KIMURA Kazunori <norytama.k2@gmail.com>
+Date: Tue, 24 Feb 2026 21:21:49 +0900
+Subject: [PATCH] Disable enabled? check in circuit_breaker
+
+---
+ lib/gitlab/gitaly_client/circuit_breaker.rb | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/lib/gitlab/gitaly_client/circuit_breaker.rb b/lib/gitlab/gitaly_client/circuit_breaker.rb
+index f7f2a79b5d7a..54037251eb9b 100644
+--- a/lib/gitlab/gitaly_client/circuit_breaker.rb
++++ b/lib/gitlab/gitaly_client/circuit_breaker.rb
+@@ -10,7 +10,7 @@ def initialize(service:, rpc:, storage:)
+       end
+ 
+       def call
+-        return yield unless enabled?
++        # return yield unless enabled?
+         return yield if authenticated_request?
+ 
+         circuit.run(exception: true) do
+@@ -27,7 +27,7 @@ def call
+       end
+ 
+       def check!
+-        return unless enabled?
++        # return unless enabled?
+         return if authenticated_request?
+         return unless circuit.open?
+ 
+-- 
+2.53.0.windows.1
+
