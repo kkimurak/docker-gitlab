@@ -2221,6 +2221,9 @@ migrate_database() {
     exec_as_git force=yes bundle exec rake gitlab:setup \
       ${GITLAB_ROOT_PASSWORD:+GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD} \
       ${GITLAB_ROOT_EMAIL:+GITLAB_ROOT_EMAIL=$GITLAB_ROOT_EMAIL} >/dev/null
+  else
+    # Revert patch around lib/gitlab/gitaly_client/circuit_breaker.rb - this patch is required only when startup
+    git apply -R "${GITLAB_BUILD_DIR}/patches/gitlabhq/0005-Disable-enabled-check-on-circuit_breaker.call.patch"
   fi
 
   # migrate database if the gitlab version has changed.
