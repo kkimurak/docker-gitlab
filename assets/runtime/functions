@@ -2218,9 +2218,18 @@ migrate_database() {
 
   if [[ -z ${COUNT} || ${COUNT} -eq 0 ]]; then
     echo "Setting up GitLab for firstrun. Please be patient, this could take a while..."
+    echo "Before gitlab:setup, we will drop database ${DB_NAME}."
+    echo "It will start in 10 seconds. If you do not agree with it, please stop the container."
+    sleep 10
+    echo "= DROP DATABASE ${DB_NAME}.."
+    # we cannot drop database withing opening it so connect to default database 'postgres'
+    PGPASSWORD="${DB_PASS}" psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER} -d postgres -Atw -c "DROP DATABASE ${DB_NAME}"
+    echo "= Done."
+    echo "= executing rake task gitlab:setup.."
     exec_as_git force=yes bundle exec rake gitlab:setup \
       ${GITLAB_ROOT_PASSWORD:+GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD} \
       ${GITLAB_ROOT_EMAIL:+GITLAB_ROOT_EMAIL=$GITLAB_ROOT_EMAIL} >/dev/null
+    echo "= Done."
   fi
 
   # migrate database if the gitlab version has changed.
