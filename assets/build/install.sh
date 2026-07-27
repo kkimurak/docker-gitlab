@@ -152,6 +152,15 @@ rm -rf ${GITLAB_PAGES_BUILD_DIR}
 echo "Downloading gitaly v.${GITALY_SERVER_VERSION}..."
 git clone -q -b v${GITALY_SERVER_VERSION} --depth 1 ${GITLAB_GITALY_URL} ${GITLAB_GITALY_BUILD_DIR}
 
+# apply patch if exists
+pwd_org=$PWD
+cd "${GITLAB_GITALY_BUILD_DIR}"
+find "${GITLAB_BUILD_DIR}/patches/gitaly" -name "*.patch" | while read -r patch_file; do
+  echo "Applying patch ${patch_file} for gitaly..."
+  patch -p1 -i "${patch_file}"
+done
+cd "${pwd_org}"
+
 # install gitaly
 make -C ${GITLAB_GITALY_BUILD_DIR} install
 mkdir -p ${GITLAB_GITALY_INSTALL_DIR}

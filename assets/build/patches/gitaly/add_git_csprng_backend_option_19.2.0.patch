@@ -1,0 +1,13 @@
+diff --git a/Makefile b/Makefile
+index 68d4ca81f..4c35b6b4e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -679,7 +679,7 @@ ${DEPENDENCY_DIR}: | ${BUILD_DIR}
+ 
+ ${DEPENDENCY_DIR}/git-distribution/build/git: ${DEPENDENCY_DIR}/git-distribution/meson.build
+ 	${Q}rm -rf "${DEPENDENCY_DIR}/git-distribution/build"
+-	${Q}meson setup "${DEPENDENCY_DIR}/git-distribution" "${DEPENDENCY_DIR}/git-distribution/build" ${GIT_MESON_BUILD_OPTIONS}
++	${Q}meson setup "${DEPENDENCY_DIR}/git-distribution" "${DEPENDENCY_DIR}/git-distribution/build" ${GIT_MESON_BUILD_OPTIONS} -Dcsprng_backend=urandom
+ 	${Q}meson compile -C "${DEPENDENCY_DIR}/git-distribution/build"
+ 	${Q}touch $@
+ 
